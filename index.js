@@ -1,12 +1,19 @@
-// index.js
-const http = require('http');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const trackRoute = require("./track-route");
+
+const app = express();
+app.use(express.json());
+
+// ✅ CORS settings go here
+app.use(
+  cors({
+    origin: ["https://northampton.megwayparcels.co.uk"], // HubSpot site
+  })
+);
+
+app.use(trackRoute);
+
 const PORT = process.env.PORT || 3000;
-
-const server = http.createServer((req, res) => {
-  res.writeHead(200, {'Content-Type': 'text/plain'});
-  res.end('ShipEngine Tracker app is running!\n');
-});
-
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
