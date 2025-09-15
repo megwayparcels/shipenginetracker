@@ -5,43 +5,62 @@ const axios = require("axios");
 
 const app = express();
 
-// Allow only specific domains (multiple supported)
+// CORS: allow your HubSpot domain(s)
+const allowedOrigins = [
+  "https://northampton.megwayparcels.co.uk",
+  "https://megwayparcels.co.uk",
+  "https://northampton.megwayparcels.co.uk/track-your-parcel",
+  "http://localhost:3000" // for local testing
+];
+
 app.use(cors({
-  origin: [
-    "https://northampton.megwayparcels.co.uk", // HubSpot site
-    "http://localhost:3000" // local testing
-  ]
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow server-to-server or Postman
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  }
 }));
 
 app.use(express.json());
 
-// ✅ GET route - test only
-app.get("/track", (req, res) => {
-  res.json({ message: "Tracking endpoint is live. Use POST with tracking_number & carrier_code to track a parcel." });
+// Optional root route
+app.get("/", (req, res) => {
+  res.send("ShipEngine Tracker API is running. Use /track endpoint.");
 });
 
-// ✅ POST route - actual ShipEngine tracking
+// POST /track route with auto carrier detection
 app.post("/track", async (req, res) => {
   const { tracking_number, carrier_code } = req.body;
 
-  if (!tracking_number || !carrier_code) {
-    return res.status(400).json({ error: "tracking_number and carrier_code are required" });
+  if (!tracking_number) {
+    return res.status(400).json({ error: "tracking_number is required" });
   }
 
   try {
-    const response = await axios.get(
-      `https://api.shipengine.com/v1/tracking?carrier_code=${carrier_code}&tracking_number=${tracking_number}`,
-      {
-        headers: {
-          "API-Key": process.env.SHIPENGINE_API_KEY
-        }
-      }
-    );
+    // ShipEngine auto-detect carrier if carrier_code is not provided
+    const url = `https://api.shipengine.com/v1/tracking?tracking_number=${tracking_number}` +
+                (carrier_code ? `&carrier_code=${carrier_code}` : "");
 
-    res.json(response.data);
+    const response = await axios.get(url, {
+      headers: { "API-Key": process.env.SHIPENGINE_API_KEY }
+    });
+
+    // ShipEngine returns an array of tracking objects
+    const trackingInfo = response.data.tracking[0] || {};
+    const status = trackingInfo.status || "N/A";
+    const events = trackingInfo.events || [];
+
+    res.json({ status, events });
+
   } catch (error) {
     console.error("ShipEngine API error:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to fetch tracking info", details: error.response?.data || error.message });
+    res.status(500).json({
+      error: "Failed to fetch tracking info",
+      details: error.response?.data || error.message
+    });
   }
 });
 
